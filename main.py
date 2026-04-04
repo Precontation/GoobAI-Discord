@@ -17,7 +17,7 @@ system_prompt_url = 'https://ai.goobapp.org/prompt.txt'
 system_prompt = ''
 
 with OpenRouter(
-    api_key=os.getenv("OPENROUTER_API_KEY")
+    api_key=os.environ["OPENROUTER_API_KEY"]
 ) as client:
     try:
         response = requests.get(system_prompt_url) # TODO: check for new system prompt every bot message, so also cache and not return full thing if already most recent
