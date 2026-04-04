@@ -8,7 +8,7 @@ on:
 
 env:
   DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
 concurrency:
   cancel-in-progress: true
