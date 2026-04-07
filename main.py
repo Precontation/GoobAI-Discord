@@ -38,11 +38,11 @@ async def on_message(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
     completion = await client.chat.completions.create(
-        model='moonshotai/kimi-k2-instruct-0905',
+        model='llama-3.3-70b-versatile',
         messages=[
         {
             'role': 'system',
-            'content': f'{system_prompt}\n\nThe user who messaged you is: {interaction.user.display_name}'
+            'content': f'{system_prompt}\n\nUser: {interaction.user.display_name}'
         },
         {
             'role': 'user',
