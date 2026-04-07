@@ -44,7 +44,7 @@ with OpenRouter(
             messages=[
             {
                 'role': 'system',
-                'content': f'{system_prompt}\n\nThe user who messaged you is: {interaction.user.display_name}'
+                'content': f'{system_prompt}\n\nThe user who messaged you is: {interaction.user.display_name}\n\n/nothink'
             },
             {
                 'role': 'user',
