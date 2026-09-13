@@ -14,7 +14,7 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 
 # Groq AI stuff
 client = AsyncGroq(api_key=os.environ['GROQ_API_KEY'])
-system_prompt_url = 'https://ai.goobapp.org/prompt.txt'
+system_prompt_url = 'https://raw.githubusercontent.com/GoobApp/goobAI-system-prompt/main/prompt.txt'
 system_prompt = ''
 
 try:
@@ -49,8 +49,9 @@ async def on_message(interaction: discord.Interaction, question: str):
             'content': question
         },
         ],
+        reasoning_effort='none',
         temperature=0.6,
-        max_completion_tokens=4096,
+        max_completion_tokens=500,
         top_p=1,
         stream=False,
         stop=None
