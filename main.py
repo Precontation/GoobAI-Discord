@@ -41,7 +41,7 @@ async def on_message(interaction: discord.Interaction, question: str):
     try:
         completion = await asyncio.wait_for(
             client.chat.completions.create(
-                model='llama-3.1-8b',
+                model='qwen/qwen3.8-27b',
                 messages=[
                     {
                         'role': 'system',
