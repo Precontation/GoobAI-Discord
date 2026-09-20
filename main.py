@@ -62,11 +62,11 @@ async def on_message(interaction: discord.Interaction, question: str):
             timeout=45
         )
     except asyncio.TimeoutError:
-        await interaction.followup.send('Goofy Goober timed out while thinking. Please try again.')
+        await interaction.followup.send('I took too long or something idk man hopefully you never see this message but if you do hi guys my name is goofy goober and im a goofy goober ok bye i hate ronny ok bye')
         return
     except Exception as e:
         print(f'Groq request failed: {e}')
-        await interaction.followup.send('Goofy Goober hit an error while thinking. Please try again.')
+        await interaction.followup.send(f'An error occurred. :goob: for debug heres the error: {e}')
         return
 
     answer = completion.choices[0].message.content or 'An error occurred. :goob:'
