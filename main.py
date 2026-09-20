@@ -10,7 +10,6 @@ dotenv.load_dotenv()
 
 # Discord stuff
 intents = discord.Intents.default()
-intents.message_content = True
 bot = commands.Bot(command_prefix='/', intents=intents)
 
 # Groq AI stuff
@@ -19,7 +18,7 @@ system_prompt_url = 'https://raw.githubusercontent.com/GoobApp/goobAI-system-pro
 system_prompt = ''
 
 try:
-    response = requests.get(system_prompt_url) # TODO: check for new system prompt every bot message, so also cache and not return full thing if already most recent
+    response = requests.get(system_prompt_url)
     if response.status_code == 200:
         system_prompt = response.text
     else:
@@ -27,57 +26,60 @@ try:
 except requests.exceptions.RequestException as e:
     print(f"An error occurred: {e}")
 
-@bot.event
-async def on_ready():
-    await bot.tree.sync()
-    print(f'Bot is logged in and ready!')
-
-@bot.tree.command(name='ask', description='Ask Goofy Goober a question')
-@discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-@discord.app_commands.allowed_installs(guilds=True, users=True)
-async def on_message(interaction: discord.Interaction, question: str):
-    await interaction.response.defer()
-
+async def get_groq_message(display_name: str, question: str):
     try:
         completion = await asyncio.wait_for(
             client.chat.completions.create(
                 model='qwen/qwen3.8-27b',
                 messages=[
-                    {
-                        'role': 'system',
-                        'content': f'{system_prompt}\n\nUser: {interaction.user.display_name}'
-                    },
-                    {
-                        'role': 'user',
-                        'content': question
-                    },
+                {
+                    'role': 'system',
+                    'content': f'{system_prompt}\n\nUser: {display_name}. Don\'t ever @mention users.'
+                },
+                {
+                    'role': 'user',
+                    'content': question
+                },
                 ],
                 reasoning_effort='none',
                 temperature=0.6,
                 max_completion_tokens=500,
                 top_p=1,
                 stream=False,
-                stop=None
+                stop=None,
             ),
-            timeout=45
+            timeout=25
         )
-    except asyncio.TimeoutError:
-        await interaction.followup.send('I took too long or something idk man hopefully you never see this message but if you do hi guys my name is goofy goober and im a goofy goober ok bye i hate ronny ok bye')
-        return
     except Exception as e:
-        print(f'Groq request failed: {e}')
-        await interaction.followup.send(f'An error occurred. :goob: for debug heres the error: {e}')
-        return
+        print(f"Groq failed! Error: {e}")
+        return "An error occurred :goob:"
 
-    answer = completion.choices[0].message.content or 'An error occurred. :goob:'
-    prefix = f'{interaction.user.display_name}: {question}\nGoofy Goober: '
-    message = f'{prefix}{answer}'
-    if len(message) > 2000:
-        max_answer_len = max(0, 2000 - len(prefix) - len('\n… [truncated]'))
-        answer = f'{answer[:max_answer_len]}\n… [truncated]'
-        message = f'{prefix}{answer}'
+    if completion and completion.choices[0].message.content:
+        return completion.choices[0].message.content
+    else:
+        return "An error occurred :goob:"
 
-    await interaction.followup.send(message)
+@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    print(f'Bot is logged in and ready!')
+
+@bot.event
+async def on_message(message: discord.Message):
+    if (bot.user in message.mentions or message.guild is None) and message.author != bot.user:
+        async with message.channel.typing():
+            message_response = await get_groq_message(message.author.display_name, message.clean_content)
+            await message.reply(message_response)
+
+@bot.tree.command(name='ask', description='Ask Goofy Goober a question')
+@discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+@discord.app_commands.allowed_installs(guilds=True, users=True)
+async def ask(interaction: discord.Interaction, question: str):
+    await interaction.response.defer()
+
+    message_response = await get_groq_message(interaction.user.display_name, question)
+
+    await interaction.followup.send(f'{interaction.user.display_name}: {question}\nGoofy Goober: {message_response}')
 
 
-bot.run(str(os.environ['DISCORD_BOT_TOKEN']))
+bot.run(os.environ['DISCORD_BOT_TOKEN'])
