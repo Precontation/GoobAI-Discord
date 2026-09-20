@@ -1,6 +1,5 @@
 from groq import AsyncGroq
 import discord
-from discord.ext import commands
 import dotenv
 import os
 import requests
@@ -10,10 +9,18 @@ dotenv.load_dotenv()
 
 # Discord stuff
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix='/', intents=intents)
+discord_client = discord.Client(intents=intents, 
+    allowed_mentions=discord.AllowedMentions(
+        users=True,
+        roles=False,
+        everyone=False,
+        replied_user=True
+    )
+)
+tree = discord.app_commands.CommandTree(discord_client)
 
 # Groq AI stuff
-client = AsyncGroq(api_key=os.environ['GROQ_API_KEY'])
+groq_client = AsyncGroq(api_key=os.environ['GROQ_API_KEY'])
 system_prompt_url = 'https://raw.githubusercontent.com/GoobApp/goobAI-system-prompt/main/prompt.txt'
 system_prompt = ''
 
@@ -29,12 +36,12 @@ except requests.exceptions.RequestException as e:
 async def get_groq_message(display_name: str, question: str):
     try:
         completion = await asyncio.wait_for(
-            client.chat.completions.create(
+            groq_client.chat.completions.create(
                 model='qwen/qwen3.8-27b',
                 messages=[
                 {
                     'role': 'system',
-                    'content': f'{system_prompt}\n\nUser: {display_name}. Don\'t ever @mention users.'
+                    'content': f'{system_prompt}\nWhen referring to users, use their name without an @ symbol.\n\nUser: {display_name}'
                 },
                 {
                     'role': 'user',
@@ -54,24 +61,24 @@ async def get_groq_message(display_name: str, question: str):
         print(f"Groq failed! Error: {e}")
         return "An error occurred :goob:"
 
-    if completion and len(completion.choices) != 0 and completion.choices[0].message.content:
+    if len(completion.choices) != 0 and completion.choices[0].message.content:
         return completion.choices[0].message.content
     else:
         return "An error occurred :goob:"
 
-@bot.event
+@discord_client.event
 async def on_ready():
-    await bot.tree.sync()
+    await tree.sync()
     print(f'Bot is logged in and ready!')
 
-@bot.event
+@discord_client.event
 async def on_message(message: discord.Message):
-    if (bot.user in message.mentions or message.guild is None) and message.author != bot.user:
+    if (discord_client.user in message.mentions or message.guild is None) and message.author != discord_client.user:
         async with message.channel.typing():
             message_response = await get_groq_message(message.author.display_name, message.clean_content)
             await message.reply(message_response)
 
-@bot.tree.command(name='ask', description='Ask Goofy Goober a question')
+@tree.command(name='ask', description='Ask Goofy Goober a question')
 @discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @discord.app_commands.allowed_installs(guilds=True, users=True)
 async def ask(interaction: discord.Interaction, question: str):
@@ -82,4 +89,4 @@ async def ask(interaction: discord.Interaction, question: str):
     await interaction.followup.send(f'{interaction.user.display_name}: {question}\nGoofy Goober: {message_response}')
 
 
-bot.run(os.environ['DISCORD_BOT_TOKEN'])
+discord_client.run(os.environ['DISCORD_BOT_TOKEN'])
