@@ -69,7 +69,7 @@ async def on_message(interaction: discord.Interaction, question: str):
         await interaction.followup.send('Goofy Goober hit an error while thinking. Please try again.')
         return
 
-    answer = completion.choices[0].message.content or 'I could not come up with a response.'
+    answer = completion.choices[0].message.content or 'An error occurred. :goob:'
     prefix = f'{interaction.user.display_name}: {question}\nGoofy Goober: '
     message = f'{prefix}{answer}'
     if len(message) > 2000:
@@ -81,4 +81,3 @@ async def on_message(interaction: discord.Interaction, question: str):
 
 
 bot.run(str(os.environ['DISCORD_BOT_TOKEN']))
-
