@@ -4,6 +4,7 @@ from discord.ext import commands
 import dotenv
 import os
 import requests
+import asyncio
 
 dotenv.load_dotenv()
 
@@ -37,29 +38,46 @@ async def on_ready():
 async def on_message(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
-    completion = await client.chat.completions.create(
-        model='qwen/qwen3.6-27b',
-        messages=[
-        {
-            'role': 'system',
-            'content': f'{system_prompt}\n\nUser: {interaction.user.display_name}'
-        },
-        {
-            'role': 'user',
-            'content': question
-        },
-        ],
-        reasoning_effort='none',
-        temperature=0.6,
-        max_completion_tokens=500,
-        top_p=1,
-        stream=False,
-        stop=None
-    )
+    try:
+        completion = await asyncio.wait_for(
+            client.chat.completions.create(
+                model='qwen/qwen3.6-27b',
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': f'{system_prompt}\n\nUser: {interaction.user.display_name}'
+                    },
+                    {
+                        'role': 'user',
+                        'content': question
+                    },
+                ],
+                reasoning_effort='none',
+                temperature=0.6,
+                max_completion_tokens=500,
+                top_p=1,
+                stream=False,
+                stop=None
+            ),
+            timeout=45
+        )
+    except asyncio.TimeoutError:
+        await interaction.followup.send('Goofy Goober timed out while thinking. Please try again.')
+        return
+    except Exception as e:
+        print(f'Groq request failed: {e}')
+        await interaction.followup.send('Goofy Goober hit an error while thinking. Please try again.')
+        return
 
-    await interaction.followup.send(f'{interaction.user.display_name}: {question}\nGoofy Goober: {completion.choices[0].message.content}')
+    answer = completion.choices[0].message.content or 'An error occurred. :goob:'
+    prefix = f'{interaction.user.display_name}: {question}\nGoofy Goober: '
+    message = f'{prefix}{answer}'
+    if len(message) > 2000:
+        max_answer_len = max(0, 2000 - len(prefix) - len('\n… [truncated]'))
+        answer = f'{answer[:max_answer_len]}\n… [truncated]'
+        message = f'{prefix}{answer}'
+
+    await interaction.followup.send(message)
 
 
 bot.run(str(os.environ['DISCORD_BOT_TOKEN']))
-
-
