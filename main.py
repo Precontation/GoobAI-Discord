@@ -54,7 +54,7 @@ async def get_groq_message(display_name: str, question: str):
         print(f"Groq failed! Error: {e}")
         return "An error occurred :goob:"
 
-    if completion and completion.choices[0].message.content:
+    if completion and len(completion.choices) != 0 and completion.choices[0].message.content:
         return completion.choices[0].message.content
     else:
         return "An error occurred :goob:"
