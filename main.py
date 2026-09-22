@@ -95,8 +95,8 @@ async def on_message(message: discord.Message):
             message_context: list[discord.Message] = []
             if message.guild and isinstance(message.channel, discord.abc.Messageable):
                 # If it's in a guild that means thre might be message context; add it
-                async for message in message.channel.history(limit=10, oldest_first=True):
-                    message_context.append(message)
+                async for history in message.channel.history(limit=10, oldest_first=True):
+                    message_context.append(history)
 
             message_response = await get_groq_message(message.author.display_name, message.clean_content, message_context)
             await message.reply(message_response)
