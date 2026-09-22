@@ -39,7 +39,8 @@ except requests.exceptions.RequestException as e:
 
 async def get_groq_message(display_name: str, question: str, previousMessages: list[discord.Message]):
     try:
-        prompt = custom_system_prompt if remove_original_system_prompt else f'{system_prompt}\nWhen referring to users, use their name without an @ symbol.\n\nUser: {display_name}' 
+        prompt = custom_system_prompt if remove_original_system_prompt else f'{system_prompt}\nWhen referring to users, use their name without an @ symbol.\n\nUser: {display_name}\n\n' + "In addition to the system prompt, a custom one was added: " + custom_system_prompt if custom_system_prompt != None else '' # Who needs code encryption when you have bad code
+
         messages = [{
             'role': 'system',
             'content': prompt
@@ -91,7 +92,13 @@ async def on_ready():
 async def on_message(message: discord.Message):
     if (discord_client.user in message.mentions or message.guild is None) and message.author != discord_client.user:
         async with message.channel.typing():
-            message_response = await get_groq_message(message.author.display_name, message.clean_content, [])
+            message_context: list[discord.Message] = []
+            if message.guild and isinstance(message.channel, discord.abc.Messageable):
+                # If it's in a guild that means thre might be message context; add it
+                async for message in message.channel.history(limit=10, oldest_first=True):
+                    message_context.append(message)
+
+            message_response = await get_groq_message(message.author.display_name, message.clean_content, message_context)
             await message.reply(message_response)
 
 @tree.command(name='ask', description='Ask Goofy Goober a question')
@@ -100,13 +107,7 @@ async def on_message(message: discord.Message):
 async def ask(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
-    message_context: list[discord.Message] = []
-    if interaction.guild and isinstance(interaction.channel, discord.abc.Messageable):
-        # If it's in a guild that means thre might be message context; add it
-        async for message in interaction.channel.history(limit=10, oldest_first=True):
-            message_context.append(message)
-
-    message_response = await get_groq_message(interaction.user.display_name, question, message_context)
+    message_response = await get_groq_message(interaction.user.display_name, question, [])
 
     await interaction.followup.send(f'{interaction.user.display_name}: {question}\nGoofy Goober: {message_response}')
 
