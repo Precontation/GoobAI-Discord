@@ -120,6 +120,7 @@ async def on_message(message: discord.Message):
             if m.author == discord_client.user:
                 if m.clean_content == ERROR_MESSAGE:
                     continue  # Don't have it knowing it errored!
+
                 formattedMessages.append(
                     {
                         "role": "assistant",
@@ -129,7 +130,33 @@ async def on_message(message: discord.Message):
                     }
                 )
             else:
-                formattedMessages.append({"role": "user", "content": content})
+                img = None
+                if m.attachments and message.id == m.id:
+                    # If there's an attached image, take the first one as context.
+                    # But only if it's the current message because it can burn tokens fast.
+                    for attachment in m.attachments:
+                        if (
+                            attachment.content_type
+                            and attachment.content_type.startswith("image/")
+                        ):
+                            img = attachment.url
+                            break
+
+                if img:
+                    formattedMessages.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": content},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": img},
+                                },
+                            ],
+                        }
+                    )
+                else:
+                    formattedMessages.append({"role": "user", "content": content})
 
         message_response = await get_ai_message(formattedMessages)
         await message.reply(message_response)
