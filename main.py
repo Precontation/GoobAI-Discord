@@ -1,4 +1,5 @@
 from groq import AsyncGroq
+from groq.types.chat import ChatCompletionMessageParam
 import discord
 import dotenv
 import os
@@ -9,6 +10,8 @@ dotenv.load_dotenv()
 
 # Discord stuff
 intents = discord.Intents.default()
+intents.message_content = True
+
 discord_client = discord.Client(intents=intents, 
     allowed_mentions=discord.AllowedMentions(
         users=True,
@@ -28,6 +31,11 @@ system_prompt = ''
 custom_system_prompt = ""
 remove_original_system_prompt = False
 
+# Consts
+ERROR_MESSAGE = "An error occurred :goob:"
+ASSISTANT_MESSAGE_PREFIX = "Goofy Goober: "
+OWNER_USER_ID = 766046835109789716
+
 try:
     response = requests.get(system_prompt_url)
     if response.status_code == 200:
@@ -35,36 +43,28 @@ try:
     else:
         print(f"Failed to retrieve file! Status code: {response.status_code}")
 except requests.exceptions.RequestException as e:
-    print(f"An error occurred: {e}")
+    print(f"An error occurred trying to get the system prompt: {e}")
 
-async def get_groq_message(display_name: str, question: str, previousMessages: list[discord.Message]):
+async def get_groq_message(formatted_messages: list[ChatCompletionMessageParam]):
     try:
-        prompt = custom_system_prompt if remove_original_system_prompt else f'{system_prompt}\nWhen referring to users, use their name without an @ symbol.\n\nUser: {display_name}\n\n' + "In addition to the system prompt, a custom one was added: " + custom_system_prompt if custom_system_prompt != None else '' # Who needs code encryption when you have bad code
+        prompt = f'{system_prompt}\nWhen referring to users, use their name without an @ symbol. User messages may be formatted as Username: message. The text before the first colon is the speaker\'s username and is not part of what they said.'
 
-        messages = [{
+        if remove_original_system_prompt:
+            prompt = custom_system_prompt
+        elif custom_system_prompt != "":
+            prompt += "\n\nIn addition to the system prompt, a custom one was added: " + custom_system_prompt
+
+        formatted_prompt: ChatCompletionMessageParam = {
             'role': 'system',
             'content': prompt
-        }]
-
-        for message in previousMessages:
-            messages.append(
-            {
-                'role': 'user',
-                'content': message.author.display_name + ": " + message.content
-            }
-        )
+        }
+        
+        messages: list[ChatCompletionMessageParam] = [formatted_prompt] + formatted_messages
+        
         completion = await asyncio.wait_for(
             groq_client.chat.completions.create(
                 model='qwen/qwen3.8-27b',
-                messages=[{
-                    'role': 'system',
-                    'content': prompt
-                },
-                {
-                    'role': 'user',
-                    'content': question
-                },
-                ],
+                messages=messages,
                 reasoning_effort='none',
                 temperature=0.6,
                 max_completion_tokens=500,
@@ -76,12 +76,12 @@ async def get_groq_message(display_name: str, question: str, previousMessages: l
         )
     except Exception as e:
         print(f"Groq failed! Error: {e}")
-        return "An error occurred :goob:"
+        return ERROR_MESSAGE
 
     if len(completion.choices) != 0 and completion.choices[0].message.content:
         return completion.choices[0].message.content
     else:
-        return "An error occurred :goob:"
+        return ERROR_MESSAGE
 
 @discord_client.event
 async def on_ready():
@@ -90,16 +90,35 @@ async def on_ready():
 
 @discord_client.event
 async def on_message(message: discord.Message):
-    if (discord_client.user in message.mentions or message.guild is None) and message.author != discord_client.user:
-        async with message.channel.typing():
-            message_context: list[discord.Message] = []
-            if message.guild and isinstance(message.channel, discord.abc.Messageable):
-                # If it's in a guild that means thre might be message context; add it
-                async for history in message.channel.history(limit=10, oldest_first=True):
-                    message_context.append(history)
+    if not ((discord_client.user in message.mentions or message.guild is None) and message.author != discord_client.user):
+        return
 
-            message_response = await get_groq_message(message.author.display_name, message.clean_content, message_context)
-            await message.reply(message_response)
+    async with message.channel.typing():
+        messages: list[discord.Message] = []
+        messages = [m async for m in message.channel.history(limit=10)]
+        messages.reverse() # Reverse it to make it chronological now
+
+        formattedMessages: list[ChatCompletionMessageParam] = []
+
+        for m in messages:
+            content = m.author.display_name + ": " + m.clean_content
+            if m.author == discord_client.user:
+                if m.clean_content == ERROR_MESSAGE:
+                    continue # Don't have it knowing it errored!
+                formattedMessages.append(
+                {
+                    'role': 'assistant',
+                    'content': content.removeprefix(ASSISTANT_MESSAGE_PREFIX) # Remove so the AI doesn't bug out and go insane
+                })
+            else:
+                formattedMessages.append(
+                {
+                    'role': 'user',
+                    'content': content
+                })
+
+        message_response = await get_groq_message(formattedMessages)
+        await message.reply(message_response)
 
 @tree.command(name='ask', description='Ask Goofy Goober a question')
 @discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
@@ -107,27 +126,28 @@ async def on_message(message: discord.Message):
 async def ask(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
 
-    message_response = await get_groq_message(interaction.user.display_name, question, [])
+    message_response = await get_groq_message([{
+        "role": 'user',
+        'content': question
+    }])
 
-    await interaction.followup.send(f'{interaction.user.display_name}: {question}\nGoofy Goober: {message_response}')
+    await interaction.followup.send(f'{interaction.user.display_name}: {question}\n{ASSISTANT_MESSAGE_PREFIX}{message_response}')
 
 @tree.command(name='set_prompt', description='YOU DONT GET TO USE ONLY I DO ASKDLFJALSDKJF')
 @discord.app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @discord.app_commands.allowed_installs(guilds=True, users=True)
-async def set_prompt(interaction: discord.Interaction, prompt: str, replace_original: bool):
+async def set_prompt(interaction: discord.Interaction, prompt: str = '', replace_original: bool = False):
     global custom_system_prompt
     global remove_original_system_prompt
 
-    await interaction.response.defer()
-
-    if interaction.user.id != 766046835109789716: # greatest coding of all time i love hardcoding things:
-        await interaction.followup.send(f'nuh uh you no dont use', ephemeral=True)
+    if interaction.user.id != OWNER_USER_ID:
+        await interaction.response.send_message(f'nuh uh you no dont use', ephemeral=True)
         return
 
     custom_system_prompt = prompt
     remove_original_system_prompt = replace_original
 
-    await interaction.followup.send(f'k set :goob: 🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪', ephemeral=True)
+    await interaction.response.send_message(f'k set :goob: 🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪🫪', ephemeral=True)
 
 
 discord_client.run(os.environ['DISCORD_BOT_TOKEN'])
