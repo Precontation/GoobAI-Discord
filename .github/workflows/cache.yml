@@ -1,4 +1,4 @@
-name: Cache Pip Packages
+name: Cache uv Packages
 
 on:
   workflow_dispatch:
@@ -6,10 +6,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    - run: pip install -r requirements.txt
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - run: uv sync --frozen
