@@ -36,7 +36,7 @@ ERROR_MESSAGE = "An error occurred :goob:"
 ASSISTANT_MESSAGE_PREFIX = "Goofy Goober: "
 OWNER_USER_ID = 766046835109789716
 AI_MODEL = "qwen/qwen3.8-27b"
-MAX_CONTEXT_MESSAGES = 5
+MAX_CONTEXT_MESSAGES = 3
 
 try:
     response = requests.get(system_prompt_url)
